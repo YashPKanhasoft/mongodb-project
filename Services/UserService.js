@@ -213,7 +213,6 @@ class UserService {
                     page,
                     totalPages,
                     totalCount
-
                 }
                 return resolve(result);
             } catch (error) {
