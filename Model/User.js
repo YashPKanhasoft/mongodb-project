@@ -2,9 +2,9 @@ const mongoose = require("mongoose");
 const Schema = mongoose;
 function image(image) {
     if (image == '') {
-        return 'https://d796-122-170-44-120.ngrok-free.app/uploads/1696326563265-profile-pic-dummy.png'
+        return process.env.PHOTO_URL +'1696488346209-photo-1503443207922-dff7d543fd0e.jpg'
     }
-    return 'https://d796-122-170-44-120.ngrok-free.app/uploads/' + image
+    return process.env.PHOTO_URL + image
 }
 const UserSchema = new mongoose.Schema(
     {

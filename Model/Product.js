@@ -3,9 +3,9 @@ let Schema = mongoose;
 let ObjectId = mongoose.Types.ObjectId
 function image(image) {
   if (image == '') {
-    return 'https://d796-122-170-44-120.ngrok-free.app/uploads/1696326563265-profile-pic-dummy.png'
+    return process.env.PHOTO_URL+'1696418220293-pexels-hammad-khalid-1786433.jpg'
   }
-  return 'https://d796-122-170-44-120.ngrok-free.app/uploads/' + image
+  return process.env.PHOTO_URL + image
 }
 const ProductSchema = new mongoose.Schema(
   {

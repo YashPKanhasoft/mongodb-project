@@ -189,7 +189,7 @@ class UserService {
     async User2List(req) {
         return new Promise(async (resolve, reject) => {
             try {
-                let limit = req.query.limit || 1;
+                let limit = req.query.limit || 5;
                 let page = req.query.page || 1;
                 if (typeof page == undefined) {
                     data = [];
@@ -202,12 +202,14 @@ class UserService {
                 }
                 const sortOptions = {};
                 sortOptions[sortField] = sortOrder;
-
                 const totalCount = await User2.count();
                 const totalPages = Math.ceil(totalCount / limit);
-                var searching = req.query.search.trim();
+                var search = req.query.search.trim();
+                if (search == "null" || !search) {
+                    search = "";
+                }
+                let data = await User2.find({ $or: [{ first_name: { $regex: search } }, { last_name: { $regex: search } }, { email: { $regex: search } }] }, { first_name: 1, last_name: 1, image: 1, email: 1 }).sort(sortOptions).limit(limit).skip((page - 1) * limit);
 
-                let data = await User2.find({ $or: [{ first_name: { $regex: searching } }, { last_name: { $regex: searching } }] }, { first_name: 1, last_name: 1, image: 1, email: 1 }).sort(sortOptions).limit(limit).skip((page - 1) * limit);
                 let result = {
                     data,
                     page,
@@ -228,14 +230,8 @@ class UserService {
                 if (req.file) {
                     checkfilename = req.file.filename;
                 }
-                let check_id = await User2.findOne({ _id: _id })
-                if (check_id) {
-                    let data = await User2.findByIdAndUpdate({ _id: _id }, { $set: { first_name: first_name, last_name: last_name, email: email, image: checkfilename } }, { returnDocument: "after" });
-                    return resolve(data);
-                } else {
-                    let error = Error("Invaild Id");
-                    return reject(error);
-                }
+                let data = await User2.findByIdAndUpdate({ _id: _id }, { $set: { first_name: first_name, last_name: last_name, email: email, image: checkfilename } }, { returnDocument: "after" });
+                return resolve(data);
             } catch (error) {
                 return reject(error);
             }

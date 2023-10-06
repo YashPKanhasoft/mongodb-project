@@ -1,9 +1,7 @@
 const mongoose = require('mongoose')
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(`mongodb://127.0.0.1:27017/projectmongodb`, {
-      useNewUrlParser: true,
-    });
+    const conn = await mongoose.connect(process.env.DATABASE_URL,  { useNewUrlParser: true });
     // let creat_collectoin = mongoose.model('user',new mongoose.Schema(user));
     console.log(`MongoDB Connected: {conn.connection.host}`);
   } catch (error) {
