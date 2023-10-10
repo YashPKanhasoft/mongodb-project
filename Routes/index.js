@@ -9,6 +9,8 @@ routes.post('/SignUp', upload.single("image"), UserController.SignUp);
 
 routes.post('/Login', UserController.login);
 
+routes.post('/VerifyOtp',UserController.VerifyOtp);
+
 routes.post('/EditProfile', upload.single("image"), Authorization.authication, UserController.EditProfile);
 
 routes.post('/ProductAdd', upload.single('image'), UserController.ProductAdd);

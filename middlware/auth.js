@@ -2,7 +2,6 @@ let User = require('../Model/User');
 let ResponseHelper = require('../Respone/ResopneController');
 let jwt = require('jsonwebtoken');
 class Auth {
-
   async authication(req, res, next) {
     try {
       if ('authorization' in req.headers && req.headers.authorization !== null) {

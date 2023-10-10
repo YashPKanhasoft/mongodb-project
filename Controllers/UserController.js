@@ -1,3 +1,4 @@
+const User = require('../Model/User');
 let ResponseHelper = require('../Respone/ResopneController');
 let UserService = require('../Services/UserService');
 const jwt = require('jsonwebtoken')
@@ -18,11 +19,19 @@ class UserController {
       return ResponseHelper.error(error, res);
     }
   }
+  async VerifyOtp(req, res) {
+    try {
+      let data = await UserService.VerifyOtp(req);
+      return ResponseHelper.success(data, 'verify successfully', res);
+    } catch (error) {
+      return ResponseHelper.error(error, res);
+    }
+  }
   async EditProfile(req, res) {
     try {
       let token = req.headers.authorization;
       let decodeData = jwt.verify(token, 'secretkey');
-      let _id = decodeData.data._id;
+      let _id = decodeData._id;
       let data = await UserService.EditProfile(req, _id);
       return ResponseHelper.success(data, 'updated sucessfully', res);
     } catch (error) {
@@ -58,7 +67,7 @@ class UserController {
     try {
       let token = req.headers.authorization;
       let decodeData = jwt.verify(token, 'secretkey');
-      let _id = decodeData.data._id;
+      let _id = decodeData.data[0]._id;
       let data = await UserService.LoginList(_id);
       return ResponseHelper.success(data, 'User Detail', res);
     } catch (error) {
