@@ -10,11 +10,11 @@ class ResponseHelper {
       res.end();
     }
     async error(error, res) {
-      let errorCode = error.code || 501;
-      let errorMessage = error.message || '';
-      console.log('message ====>', error);
+      let errorCode = 200;
+      let Error = error;
+      console.log('message ====>',error);
       res.writeHead(errorCode, { 'Content-Type': 'application/json' })
-      res.write(JSON.stringify({ status: errorCode, message: errorMessage, data: {} }))
+      res.write(JSON.stringify({ status: errorCode,error:Error }))
       res.end();
     }
   }

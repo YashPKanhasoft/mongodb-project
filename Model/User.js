@@ -23,6 +23,8 @@ const UserSchema = new mongoose.Schema(
             base32:String,
             otpauth_url:String
         },
+        enable:{type:Boolean},
+        isvalidation:{type:Boolean},    
         auth_token: { type: String, default: '' }
     },
 );

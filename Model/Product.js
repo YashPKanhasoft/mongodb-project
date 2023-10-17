@@ -1,11 +1,18 @@
 const mongoose = require('mongoose');
 let Schema = mongoose;
 let ObjectId = mongoose.Types.ObjectId
-function image(image) {
-  if (image == '') {
-    return process.env.PHOTO_URL+'1696418220293-pexels-hammad-khalid-1786433.jpg'
-  }
-  return process.env.PHOTO_URL + image
+function images(images) {
+
+   const uploadedPhotoURLs = images.map((images) => {
+    return process.env.PHOTO_URL + images;
+
+  });
+
+  // if (uploadedPhotoURLs.length === 0) {
+  //   return [process.env.PHOTO_URL + '1697009495923-default-image.jpg'];
+  // }
+
+  return uploadedPhotoURLs
 }
 const ProductSchema = new mongoose.Schema(
   {
@@ -14,12 +21,14 @@ const ProductSchema = new mongoose.Schema(
       default: new ObjectId
     },
     title: { type: String },
-    price: { type: Number },
+    price: { type: String },
     description: { type: String },
-    image: {
-      type: String,
-      default: "",
-      get: image,
+    images: {
+      type: Array,
+      get: images,
+    },
+    fileinfo: {
+      type: Array,
     },
   },
 );

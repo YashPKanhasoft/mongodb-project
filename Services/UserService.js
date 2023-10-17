@@ -7,7 +7,9 @@ const mongoose = require('mongoose');
 let ObjectId = mongoose.Types.ObjectId
 var speakeasy = require("@levminer/speakeasy");
 var QRCode = require('qrcode');
-
+const Post = require("../Model/Post");
+const nodemailer = require("nodemailer");
+const sendEmail = require("../middlware/email");
 class UserService {
 
   async SignUp(req) {
@@ -31,8 +33,12 @@ class UserService {
           }
           return resolve(data);
         } else {
-          let error = { message: "EmailId is already exits" }
-          return reject(error);
+          const error = {
+            status: 200,
+            errorCode: "EMAIL_EXISTS",
+            message: "This email address already in use! Please enter a different one",
+          };
+          throw error
         }
       } catch (error) {
         return reject(error);
@@ -55,23 +61,34 @@ class UserService {
               console.log('==>', token);
               let update_token = await User.updateOne({ email: data[0].email }, { $set: { auth_token: token } })
             }
-            var secret = speakeasy.generateSecret({ length: 20 });
-            // data.two_factor_temp_secret = secret.base32;
-            console.log(secret.base32);
-            let updatesecret = await User.findOneAndUpdate({ email: data[0].email }, { $set: { secret: secret } }, {
-              new: true,
-              projection: { secret: 1, email: 1, auth_token: 1 }
-            })
-            return resolve(updatesecret);
+            let Checkenable = await User.findOne({ $and: [{ enable: true }, { email: email }] })
+            if (!Checkenable) {
+              var secret = speakeasy.generateSecret({ length: 20 });
+              let updatesecret = await User.findOneAndUpdate({ email: data[0].email }, { $set: { secret: secret, enable: true } }, {
+                new: true,
+                projection: { secret: 1, email: 1, auth_token: 1 }
+              })
+              return resolve(updatesecret);
+            } else {
+              let check_enable = await User.findOne({ $and: [{ enable: true }, { email: email }] }, { enable: 1, email: 1 })
+              return resolve(check_enable)
+            }
           }
           else {
-            let error = Error('Please Enter Valid password.');
-            error.code = 400;
-            reject(error)
+            const error = {
+              status: 200,
+              errorCode: "INCORRECT_PASSWORD",
+              message: "Password is incorrect",
+            };
+           throw error
           }
         } else {
-          let error = Error('invaild email');
-          return reject(error);
+          const error = {
+            status: 200,
+            errorCode: "INVALID_EMAIL",
+            message: "Please enter valid email address.",
+          };
+          throw error
         }
       } catch (error) {
         return reject(error);
@@ -82,22 +99,116 @@ class UserService {
     return new Promise(async (resolve, reject) => {
       try {
         let { secretkey, email } = req.body
-        let secrets = await User.findOne({ email: email }, { first_name: 1, last_name: 1, email: 1, image: 1, secret: 1 })
+        let secrets = await User.findOne({ email: email }, { first_name: 1, last_name: 1, email: 1, image: 1, secret: 1, auth_token: 1 })
+
         let verify = speakeasy.totp.verify({
           secret: secrets.secret.base32,
           encoding: "base32",
           token: secretkey,
-          window: 0
-
         })
         console.log("verify=====>", verify);
         if (verify == false) {
-          let error = { message: "Invaild Otp" }
-          return reject(error)
+          const error = {
+            status: 200,
+            errorCode: "INVALID_OTP",
+            message: "inavild otp",
+          };
+          throw error
         } else {
           return resolve(secrets)
         }
 
+      } catch (error) {
+        return reject(error);
+      }
+    })
+  }
+  async ChangePassword(req, email) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        let { password, Newpassword, ConfirmNewpassword } = req.body
+        console.log(req.body);
+        var data = await User.findOne({ email: email })
+        if (data) {
+          var x = bcrypt.compareSync(`${password}`, data.password)
+          if (x) {
+            if (password === Newpassword) {
+              const error = {
+                status: 200,
+                errorCode: "PASSWORD_DIFFERENT",
+                message: "Password must be differnet than Old Password",
+              };
+              throw error
+            } else if (Newpassword === ConfirmNewpassword) {
+              ConfirmNewpassword = await bcrypt.hashSync(Newpassword, 10)
+              var upadte = await User.findOneAndUpdate({ email: email }, { $set: { password: ConfirmNewpassword } })
+              return resolve()
+            }
+            else {
+              const error = {
+                status: 200,
+                errorCode: "PASSWORD_NOT_MATCH",
+                message: "ConfirmNewpassword and NewPassword is not match",
+              };
+              throw error
+            }
+          } else {
+            const error = {
+              status: 200,
+              errorCode: "INCORRECT_PASSWORD",
+              message: "Password is incorrect",
+            };
+           throw error
+          }
+        } else {
+          const error = {
+            status: 200,
+            errorCode: "INVALID_EMAIL",
+            message: "Please enter valid email address.",
+          };
+          throw error
+        }
+      } catch (error) {
+        return reject(error);
+      }
+    })
+  }
+  async SentLink(req) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        let { email } = req.body;
+        const data = await User.find({ email: email });
+        console.log(data);
+        if (data.length > 0) {
+          data[0].auth_token = '';
+          let token = jwt.sign({ data }, 'secretkey', { expiresIn: '5day' });
+          data[0].auth_token = token;
+          console.log('==>', token);
+          let update_token = await User.updateOne({ email: data[0].email }, { $set: { auth_token: token } })
+          const link = `<a href = http://localhost:3000/forgetPassword?${token} >click here</a>`;
+
+          let sendmail = await sendEmail(data[0].email, "Password reset", link);
+          return resolve({ sendmail, token });
+        } else {
+          const error = {
+            status: 200,
+            errorCode: "INVALID_EMAIL",
+            message: "Please enter valid email address.",
+          };
+          throw error
+        }
+      } catch (error) {
+        return reject(error);
+      }
+    })
+  }
+  async ForgetPassword(email, req) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        let { password } = req.body
+        const hash = bcrypt.hashSync(password, 10);
+        let checkupadte = await User.findOneAndUpdate({ email: email }, { $set: { password: hash } });
+        return resolve();
       } catch (error) {
         return reject(error);
       }
@@ -116,8 +227,12 @@ class UserService {
           let data = await User.findByIdAndUpdate({ _id: _id }, { $set: { first_name: first_name, last_name: last_name, email: email, image: checkfilename } }, { returnDocument: "after" });
           return reslove(data);
         } else {
-          let error = Error("invaild id");
-          return reject(error);
+          const error = {
+            status: 200,
+            errorCode: "INVALID_Id",
+            message: "Please enter valid ID.",
+          };
+          throw error
         }
       } catch (error) {
         return reject(error);
@@ -128,24 +243,18 @@ class UserService {
     return new Promise(async (resolve, reject) => {
       try {
         let limit = req.query.limit || 1;
-        console.log("limit", limit)
         let page = req.query.page || 1;
-        console.log("page", page);
         if (typeof page == undefined) {
           data = [];
         }
         const sortDirection = req.query.sort || 'asc';
-
         let sortOrder = 1;
-
         if (sortDirection === 'desc') {
           sortOrder = -1;
         }
         const totalCount = await User.count();
         const totalPages = Math.ceil(totalCount / limit);
-        console.log("total", totalCount);
         var searching = req.query.search.trim();
-        console.log(searching);
 
         let data = await User.find({ $or: [{ first_name: { $regex: searching } }, { last_name: { $regex: searching } }] }, { first_name: 1, last_name: 1, image: 1 }).sort({ first_name: sortOrder, last_name: sortOrder }).limit(limit).skip((page - 1) * limit);
         let result = {
@@ -153,7 +262,6 @@ class UserService {
           page,
           totalPages,
           totalCount
-
         }
         return resolve(result);
       } catch (error) {
@@ -165,15 +273,26 @@ class UserService {
   async ProductAdd(req) {
     return new Promise(async (resolve, reject) => {
       try {
-
         let { title, price, description, image } = req.body
+        const uploadedPhotoNames = req.files.map((file) => file.filename);
+        const photo = new Product({ image: uploadedPhotoNames });
         let checkfilename = "";
         if (req.file) {
           checkfilename = req.file.filename;
         }
-        let data = await Product.create({ title: title, price: price, description: description, image: checkfilename });
-        data.save();
-        return resolve(data);
+        const info = []
+        for (var i = 0; i < req.files.length; i++) {
+
+          const filename = req.files[i].filename;
+          const mimeType = req.files[i].mimetype
+          const filesize = req.files[i].size + " bytes"
+          let fileinfo = {
+            filename, mimeType, filesize
+          }
+          info.push(fileinfo);
+        }
+        let data = await Product.create({ title: title, price: price, description: description, images: uploadedPhotoNames, fileinfo: info });
+        data.save(); return resolve(data);
       } catch (error) {
         return reject(error);
       }
@@ -182,13 +301,99 @@ class UserService {
   async ProductList(req) {
     return new Promise(async (resolve, reject) => {
       try {
-        let limit = 5;
-        let page = req.query.page;
-        if (typeof page == undefined) {
-          data = [];
+        let limit = req.query.limit || 5;
+        let page = parseInt(req.query.page) || 1;
+        page += 1
+        const cursor = req.query.cursor || null;
+        const query = cursor ? { product_id: { $gt: cursor } } : {};
+
+        let data = await Product.find(query, {}, { description: 1, title: 1, images: 1, price: 1 },).limit(limit).skip((page - 1) * limit);
+        for (let i = 0; i < data.length; i++) {
+          let images = [];
+          for (let x = 0; x < data[i].fileinfo.length; x++) {
+            if (data[i].fileinfo[x].mimeType == "application/zip") {
+              images.push('1697197651779-pdflogo.png')
+            } else if (data[i].fileinfo[x].mimeType == "image/jpeg" || data[i].fileinfo[x].mimeType == "image/avif" || data[i].fileinfo[x].mimeType == "video/mp4" || data[i].fileinfo[x].mimeType == "image/png") {
+              images.push(data[i].fileinfo[x].filename)
+            }
+          }
+          data[i].images = images
         }
-        let data = await Product.find({}, { description: 1, title: 1, image: 1, price: 1 }).limit(limit).skip((page - 1) * limit);
-        return resolve(data);
+        const newCursor = data.length > 0 ? data[data.length - 1].product_id : null;
+        if (newCursor == null) {
+          page = null
+        }
+        return resolve({ data, cursor: newCursor, nextpage: page });
+      } catch (error) {
+        return reject(error);
+      }
+    })
+  }
+  async UpdateProduct(req) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        let { _id, title, price, description } = req.body
+        const uploadedPhotoNames = req.files.map((file) => file.filename);
+        const photo = new Product({ image: uploadedPhotoNames });
+        const info = []
+
+        for (var i = 0; i < req.files.length; i++) {
+
+          const filename = req.files[i].filename;
+          const mimeType = req.files[i].mimetype
+          const filesize = req.files[i].size + " bytes"
+          let fileinfo = {
+            filename, mimeType, filesize
+          }
+          info.push(fileinfo);
+        }
+        var detail = await Product.findOne({
+          _id: _id,
+        });
+        if (detail) {
+
+          const updateData = { title: title, price: price, description: description };
+          if (req.files && req.files.length > 0) {
+            updateData.images = uploadedPhotoNames;
+            updateData.fileinfo = info
+          }
+          let data = await Product.findByIdAndUpdate({ _id: _id }, { $set: updateData }, { returnDocument: 'after' });
+
+          return resolve(data);
+        }
+
+      } catch (error) {
+        return reject(error);
+      }
+    })
+  }
+  async DeletProduct(req) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        let { _id } = req.body
+        let data = await Product.deleteOne({ _id: _id })
+        return resolve();
+      } catch (error) {
+        return reject(error);
+      }
+    })
+  }
+  async ProductDetails(req) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        let { _id } = req.body
+        let data = await Product.findOne({ _id: _id });
+        if(data){
+          return resolve(data);
+        }else{
+          const error = {
+            status: 200,
+            errorCode: "INVALID_Id",
+            message: "Please enter valid ID.",
+          };
+          console.log(error)
+          throw error
+        }
       } catch (error) {
         return reject(error);
       }
@@ -198,10 +403,22 @@ class UserService {
     return new Promise(async (resolve, reject) => {
       try {
         let data = await User.find({ _id: _id })
-        console.log(data);
         return resolve(data[0]);
       } catch (error) {
         return reject(error)
+      }
+    })
+  }
+  async CheckValidation(_id) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        let data = await User.findOneAndUpdate({ _id: _id }, { $set: { isvalidation: true } }, {
+          new: true,
+          projection: { isvalidation: 1 }
+        })
+        return resolve(data);
+      } catch (error) {
+        return reject(error);
       }
     })
   }
@@ -219,10 +436,13 @@ class UserService {
           data.save();
           return resolve(data);
         } else {
-          let error = { message: "EmailId Already Exits." }
-          return reject(error);
+          const error = {
+            status: 200,
+            errorCode: "EMAIL_EXISTS",
+            message: "This email address already in use! Please enter a different one",
+          };
+          throw error
         }
-
       } catch (error) {
         return reject(error);
       }
@@ -283,8 +503,12 @@ class UserService {
           return resolve(data);
         }
         else {
-          let error = { message: "EmailId is already exits" }
-          return reject(error);
+          const error = {
+            status: 200,
+            errorCode: "EMAIL_EXISTS",
+            message: "This email address already in use! Please enter a different one",
+          };
+          throw error
         }
       } catch (error) {
         return reject(error);
@@ -298,6 +522,20 @@ class UserService {
         let data = await User2.deleteOne({ _id: _id });
         let multiple = await User2.deleteMany({ _id: { $in: _id } })
         return resolve();
+      } catch (error) {
+        return reject(error);
+      }
+    })
+  }
+  async FileUpload(req) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        let checkfilename = "";
+        if (req.file) {
+          checkfilename = req.file.filename;
+        }
+        let data = await Post.create({ file: checkfilename })
+        return resolve(data);
       } catch (error) {
         return reject(error);
       }
